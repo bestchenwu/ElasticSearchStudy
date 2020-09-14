@@ -12,6 +12,7 @@ ElasticSearchStudy.iml
 scalaStudy.iml
 /out
 /target
+/target/**
 /project
 spark.iml
 /metastore_db
