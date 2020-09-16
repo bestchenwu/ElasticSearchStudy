@@ -2,8 +2,12 @@ package common;
 
 import org.apache.commons.lang.StringUtils;
 import org.apache.http.HttpHost;
+import org.elasticsearch.action.ActionListener;
+import org.elasticsearch.action.DocWriteRequest;
 import org.elasticsearch.action.DocWriteResponse;
 import org.elasticsearch.action.admin.indices.delete.DeleteIndexRequest;
+import org.elasticsearch.action.bulk.BulkRequest;
+import org.elasticsearch.action.bulk.BulkResponse;
 import org.elasticsearch.action.delete.DeleteRequest;
 import org.elasticsearch.action.delete.DeleteResponse;
 import org.elasticsearch.action.get.GetRequest;
@@ -198,5 +202,45 @@ public class ElasticSearchClient implements Closeable {
         updateRequest.fetchSource(false);
         UpdateResponse updateResponse = restHighLevelClient.update(updateRequest, RequestOptions.DEFAULT);
         return updateResponse.status() == RestStatus.OK;
+    }
+
+    /**
+     * 批处理的方式处理请求(同步)
+     *
+     * @param list
+     * @return boolean
+     * @throws IOException
+     * @author chenwu on 2020.9.16
+     */
+    public boolean processRequestSync(List<DocWriteRequest> list) throws IOException{
+        BulkRequest request = new BulkRequest();
+        request.add(list.toArray(new DocWriteRequest[0]));
+        BulkResponse bulkResponse = restHighLevelClient.bulk(request, RequestOptions.DEFAULT);
+        return !bulkResponse.hasFailures();
+    }
+
+    /**
+     * 异步处理
+     *
+     * @param list
+     * @throws IOException
+     * @author chenwu on 2020.9.16
+     */
+    public void processRequestASync(List<DocWriteRequest> list,long timeout) throws IOException{
+        BulkRequest request = new BulkRequest();
+        request.add(list.toArray(new DocWriteRequest[0]));
+        request.timeout(TimeValue.timeValueSeconds(timeout));
+        restHighLevelClient.bulkAsync(request, RequestOptions.DEFAULT, new ActionListener<BulkResponse>() {
+            @Override
+            public void onResponse(BulkResponse bulkItemResponses) {
+                 if(bulkItemResponses.hasFailures()){
+                    throw new RuntimeException(bulkItemResponses.buildFailureMessage());
+                 };
+            }
+            @Override
+            public void onFailure(Exception e) {
+                throw new RuntimeException(e);
+            }
+        });
     }
 }

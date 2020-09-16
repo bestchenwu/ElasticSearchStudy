@@ -1,5 +1,10 @@
 package common;
 
+/**
+ * 符号常量类
+ *
+ * @author chenwu on 2020.9.16
+ */
 public class SymbolConstants {
 
     public static final String SYMBOL_DH = ",";// 逗号常量
