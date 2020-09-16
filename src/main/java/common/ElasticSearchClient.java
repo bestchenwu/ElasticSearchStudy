@@ -14,6 +14,8 @@ import org.elasticsearch.action.get.GetRequest;
 import org.elasticsearch.action.get.GetResponse;
 import org.elasticsearch.action.index.IndexRequest;
 import org.elasticsearch.action.index.IndexResponse;
+import org.elasticsearch.action.search.SearchRequest;
+import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.action.support.master.AcknowledgedResponse;
 import org.elasticsearch.action.update.UpdateRequest;
 import org.elasticsearch.action.update.UpdateResponse;
@@ -24,11 +26,19 @@ import org.elasticsearch.client.RestHighLevelClient;
 import org.elasticsearch.client.indices.CreateIndexRequest;
 import org.elasticsearch.client.indices.CreateIndexResponse;
 import org.elasticsearch.client.indices.GetIndexRequest;
+import org.elasticsearch.common.Strings;
 import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.common.xcontent.XContentFactory;
+import org.elasticsearch.index.query.QueryBuilder;
+import org.elasticsearch.index.query.QueryBuilders;
 import org.elasticsearch.rest.RestStatus;
+import org.elasticsearch.search.SearchHit;
+import org.elasticsearch.search.SearchHits;
+import org.elasticsearch.search.builder.SearchSourceBuilder;
 import org.elasticsearch.search.fetch.subphase.FetchSourceContext;
+import org.elasticsearch.search.sort.FieldSortBuilder;
+import org.elasticsearch.search.sort.SortOrder;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -220,7 +230,7 @@ public class ElasticSearchClient implements Closeable {
     }
 
     /**
-     * 异步处理
+     * 异步批处理es的请求
      *
      * @param list
      * @throws IOException
@@ -242,5 +252,44 @@ public class ElasticSearchClient implements Closeable {
                 throw new RuntimeException(e);
             }
         });
+    }
+
+    /**
+     * 处理搜索query
+     *
+     * @author chenwu on 2020.9.16
+     */
+    public List<Map<String,Object>> processQuery(String indexName) throws IOException {
+        SearchRequest searchRequest = new SearchRequest(indexName);
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
+        //只等于某个具体的name
+        //QueryBuilder queryBuilder = QueryBuilders.matchQuery("name","jack");
+        //phraseQuery 对应{"match":{"title":"guanggu board"}}
+        QueryBuilder queryBuilder1 = QueryBuilders.matchPhraseQuery("address","guanggu board");
+        QueryBuilder queryBuilder2 = QueryBuilders.rangeQuery("age").gt(17);
+        QueryBuilder queryBuilder = QueryBuilders.boolQuery().must(queryBuilder1).must(queryBuilder2);
+        searchSourceBuilder.query(queryBuilder);
+        //FieldSortBuilder fieldSortBuilder = new FieldSortBuilder("age").order(SortOrder.DESC);
+        FieldSortBuilder fieldSortBuilder = new FieldSortBuilder("_id").order(SortOrder.ASC);
+        //添加排序条件
+        searchSourceBuilder.sort(fieldSortBuilder);
+        //添加只包含哪些includes
+        String[] includes = new String[]{"name","age","address"};
+        searchSourceBuilder.fetchSource(includes, Strings.EMPTY_ARRAY);
+        searchSourceBuilder.size(1);
+        searchSourceBuilder.searchAfter(new Object[]{"1"});
+        searchRequest.source(searchSourceBuilder);
+        SearchResponse searchResponse = restHighLevelClient.search(searchRequest, RequestOptions.DEFAULT);
+        SearchHits hits = searchResponse.getHits();
+        List<Map<String,Object>> list = new ArrayList<>();
+        for(SearchHit hit : hits){
+            String docId = hit.getId();
+            Map<String, Object> sourceAsMap = hit.getSourceAsMap();
+            Map<String,Object> idMap = new HashMap<>();
+            idMap.put("_id",docId);
+            list.add(idMap);
+            list.add(sourceAsMap);
+        }
+        return list;
     }
 }
